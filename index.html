@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智能衣橱 - Smart Wardrobe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#fbf7ff',
+                            100: '#f5f0ff',
+                            200: '#ede5ff',
+                            300: '#ddd0ff',
+                            400: '#c9b5f7',
+                            500: '#b49be8',
+                            600: '#9f82d9',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { font-family: 'Inter', 'Noto Sans SC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #fbf7ff; overflow-x: hidden; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .glass {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(201, 181, 247, 0.2);
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        .page-transition { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .page-hidden { opacity: 0; pointer-events: none; position: absolute; transform: scale(0.95); }
+        .page-active { opacity: 1; pointer-events: all; position: relative; transform: scale(1); }
+        .category-chip {
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(201, 181, 247, 0.2);
+        }
+        .category-chip.active {
+            background: linear-gradient(135deg, #c9b5f7, #b49be8);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(196, 181, 232, 0.4);
+            border-color: transparent;
+        }
+        .outfit-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(201, 181, 247, 0.15);
+            margin-bottom: 16px;
+        }
+        .item-chip {
+            background: linear-gradient(135deg, #f5f0ff, #fbf7ff);
+            border: 1px solid rgba(201, 181, 247, 0.3);
+        }
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        .match-score {
+            background: linear-gradient(135deg, #c9b5f7, #b49be8);
+            color: white;
+            font-weight: 600;
+        }
+        .ai-thinking-dot {
+            width: 8px;
+            height: 8px;
+            background: #c9b5f7;
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .ai-thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+        .ai-thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+<base target="_blank">
+</head>
+<body class="bg-[#fbf7ff] text-slate-700 antialiased">
+
+    <div id="app" class="max-w-md mx-auto min-h-screen relative shadow-2xl overflow-hidden bg-white/60 border-x border-primary-100">
+        
+        <!-- 状态栏 -->
+        <div class="glass sticky top-0 z-50 px-6 py-3 flex justify-between items-center text-xs font-medium text-slate-500">
+            <span>09:41</span>
+            <div class="flex gap-1">
+                <svg class="w-4 h-4 text-primary-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+            </div>
+        </div>
+
+        <div class="pb-20 relative">
+            
+            <!-- AI发现页面 - 修复版 -->
+            <div id="page-discovery" class="page-transition page-hidden min-h-screen bg-white/60">
+                <div class="glass sticky top-0 z-10 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-center text-slate-800">AI搭配灵感</h2>
+                </div>
+
+                <div class="p-4">
+                    <!-- 搜索框 -->
+                    <div class="relative mb-4">
+                        <input type="text" id="ai-search-input" placeholder="搜索单品，例如：工装裙、连衣裙..." 
+                               class="w-full bg-white border border-primary-200 rounded-2xl py-4 pl-12 pr-12 text-sm focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 shadow-sm"
+                               onkeypress="if(event.key==='Enter') startAISearch()">
+                        <svg class="w-5 h-5 text-primary-400 absolute left-4 top-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <button onclick="startAISearch()" class="absolute right-3 top-3 w-8 h-8 bg-primary-400 rounded-full flex items-center justify-center text-white shadow-md hover:bg-primary-500 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- 热门标签 -->
+                    <div class="mb-6" id="trending-tags">
+                        <p class="text-xs text-slate-500 mb-3 font-medium">热门搜索</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="quickSearch('工装裙')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">🔧 工装裙</button>
+                            <button onclick="quickSearch('约会穿搭')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">💕 约会穿搭</button>
+                            <button onclick="quickSearch('通勤套装')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">💼 通勤套装</button>
+                            <button onclick="quickSearch('卫衣')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">👟 卫衣</button>
+                            <button onclick="quickSearch('连衣裙')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">👗 连衣裙</button>
+                            <button onclick="quickSearch('大衣')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">🧥 大衣</button>
+                        </div>
+                    </div>
+
+                    <!-- AI思考中 -->
+                    <div id="ai-thinking" class="hidden py-12 text-center">
+                        <div class="flex justify-center gap-1 mb-4">
+                            <span class="ai-thinking-dot"></span>
+                            <span class="ai-thinking-dot"></span>
+                            <span class="ai-thinking-dot"></span>
+                        </div>
+                        <p class="text-sm text-slate-600 mb-2">AI正在分析时尚数据...</p>
+                        <p class="text-xs text-slate-400" id="ai-status">准备中...</p>
+                    </div>
+
+                    <!-- 推荐结果 -->
+                    <div id="ai-results" class="hidden space-y-4">
+                        <div class="flex justify-between items-center mb-2 px-1">
+                            <div>
+                                <h3 class="font-semibold text-slate-800">推荐搭配方案</h3>
+                                <p class="text-xs text-slate-500 mt-0.5">为您找到以下搭配</p>
+                            </div>
+                            <span class="text-xs text-primary-500 font-medium bg-primary-50 px-2 py-1 rounded-full" id="result-count">0套</span>
+                        </div>
+                        <div id="inspiration-grid" class="space-y-4">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 默认推荐 -->
+                    <div id="default-inspiration" class="space-y-4">
+                        <h3 class="font-semibold text-slate-800 mb-3 px-1">热门推荐</h3>
+                        <div onclick="quickSearch('工装裙')" class="bg-white rounded-2xl p-3 border border-primary-100 shadow-sm cursor-pointer hover:shadow-md transition-all">
+                            <div class="flex gap-3">
+                                <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=200&h=200&fit=crop" class="w-20 h-20 rounded-lg object-cover">
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-slate-800 text-sm mb-1">工装裙穿搭指南</h4>
+                                    <p class="text-xs text-slate-500 mb-2">街头酷飒 · 温柔甜酷 · 通勤干练</p>
+                                    <span class="text-xs text-primary-500 bg-primary-50 px-2 py-0.5 rounded-full">查看3套方案</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div onclick="quickSearch('约会穿搭')" class="bg-white rounded-2xl p-3 border border-primary-100 shadow-sm cursor-pointer hover:shadow-md transition-all">
+                            <div class="flex gap-3">
+                                <img src="https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=200&h=200&fit=crop" class="w-20 h-20 rounded-lg object-cover">
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-slate-800 text-sm mb-1">浪漫约会穿搭</h4>
+                                    <p class="text-xs text-slate-500 mb-2">法式优雅 · 甜美淑女</p>
+                                    <span class="text-xs text-primary-500 bg-primary-50 px-2 py-0.5 rounded-full">查看方案</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 其他页面占位 -->
+            <div id="page-wardrobe" class="page-transition page-active p-4">
+                <h1 class="text-2xl font-bold text-slate-800 mb-4">我的衣橱</h1>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-white rounded-2xl p-4 border border-primary-100 text-center">
+                        <p class="text-slate-400 text-sm">示例单品</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="page-community" class="page-transition page-hidden p-4">
+                <h2 class="text-lg font-semibold text-center mb-4">好友社区</h2>
+                <div class="text-center text-slate-400 text-sm">社区内容...</div>
+            </div>
+            
+            <div id="page-outfit" class="page-transition page-hidden p-4">
+                <div class="text-center text-slate-400">搭配功能...</div>
+            </div>
+            
+            <div id="page-profile" class="page-transition page-hidden p-4">
+                <div class="text-center text-slate-400">个人中心...</div>
+            </div>
+
+        </div>
+
+        <!-- 底部导航 -->
+        <div class="fixed bottom-0 left-0 right-0 glass safe-bottom z-40 max-w-md mx-auto border-t border-primary-100">
+            <div class="flex justify-around items-center py-2">
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('wardrobe')" data-page="wardrobe">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    <span class="text-[10px] font-medium">衣橱</span>
+                </button>
+                
+                <!-- 发现按钮 -->
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-primary-400" onclick="switchPage('discovery')" data-page="discovery">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                    <span class="text-[10px] font-medium">发现</span>
+                </button>
+
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('community')" data-page="community">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    <span class="text-[10px] font-medium">社区</span>
+                </button>
+                
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('outfit')" data-page="outfit">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+                    <span class="text-[10px] font-medium">搭配</span>
+                </button>
+                
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('profile')" data-page="profile">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <span class="text-[10px] font-medium">我的</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full text-sm font-medium shadow-xl opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+            提示信息
+        </div>
+    </div>
+
+    <script>
+        // 完整的AI搭配数据库
+        const outfitDatabase = {
+            '工装裙': [
+                {
+                    id: 'work-001',
+                    title: '街头酷飒风',
+                    matchScore: 95,
+                    mainImage: 'https://images.unsplash.com/photo-1550614000-4b9519e02a48?w=800&h=600&fit=crop',
+                    items: [
+                        { name: '军绿工装裙', category: 'bottoms', color: '#4B5320', image: 'https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=200&h=200&fit=crop' },
+                        { name: '白色短款卫衣', category: 'tops', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=200&h=200&fit=crop' },
+                        { name: '黑色马丁靴', category: 'shoes', color: '#000000', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&h=200&fit=crop' },
+                        { name: '银链项链', category: 'accessories', color: '#C0C0C0', image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#4B5320', '#FFFFFF', '#000000', '#C0C0C0'],
+                    styleTags: ['街头', '酷飒', '美式复古'],
+                    occasion: '逛街 / 音乐节 / 校园',
+                    reason: '工装裙的硬朗线条与短款卫衣的休闲感完美平衡，马丁靴增加酷感，银色配饰点缀提升精致度。',
+                    views: '3.2k'
+                },
+                {
+                    id: 'work-002',
+                    title: '温柔甜酷风',
+                    matchScore: 88,
+                    mainImage: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&h=600&fit=crop',
+                    items: [
+                        { name: '卡其工装裙', category: 'bottoms', color: '#D4C4B0', image: 'https://images.unsplash.com/photo-1583496661160-fb5886a0bbbb?w=200&h=200&fit=crop' },
+                        { name: '粉色针织背心', category: 'tops', color: '#FFB6C1', image: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=200&h=200&fit=crop' },
+                        { name: '白色老爹鞋', category: 'shoes', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?w=200&h=200&fit=crop' },
+                        { name: '帆布托特包', category: 'accessories', color: '#F5F5DC', image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#D4C4B0', '#FFB6C1', '#FFFFFF', '#F5F5DC'],
+                    styleTags: ['甜酷', '温柔', '韩系'],
+                    occasion: '约会 / 下午茶 / 拍照',
+                    reason: '卡其色的柔和与粉色的甜美碰撞，工装元素中和过于甜腻的感觉，打造可盐可甜的平衡感。',
+                    views: '2.8k'
+                }
+            ],
+            '约会穿搭': [
+                {
+                    id: 'date-001',
+                    title: '法式浪漫风',
+                    matchScore: 92,
+                    mainImage: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&h=600&fit=crop',
+                    items: [
+                        { name: '碎花茶歇裙', category: 'dresses', color: '#E6E6FA', image: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=200&h=200&fit=crop' },
+                        { name: '米色针织开衫', category: 'outerwear', color: '#F5F5DC', image: 'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=200&h=200&fit=crop' },
+                        { name: '裸色芭蕾鞋', category: 'shoes', color: '#FFDAB9', image: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=200&h=200&fit=crop' },
+                        { name: '珍珠耳钉', category: 'accessories', color: '#FFFFF0', image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#E6E6FA', '#F5F5DC', '#FFDAB9', '#FFFFF0'],
+                    styleTags: ['法式', '优雅', '浪漫'],
+                    occasion: '晚餐约会 / 看展 / 花园派对',
+                    reason: '茶歇裙的V领设计修饰颈部线条，碎花图案增添女人味，珍珠配饰呼应优雅主题，裸色鞋履拉长腿部比例。',
+                    views: '5.6k'
+                }
+            ],
+            '通勤套装': [
+                {
+                    id: 'commute-001',
+                    title: '知性干练风',
+                    matchScore: 90,
+                    mainImage: 'https://images.unsplash.com/photo-1594633313593-bab3825d0caf?w=800&h=600&fit=crop',
+                    items: [
+                        { name: '灰色西装外套', category: 'outerwear', color: '#808080', image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=200&h=200&fit=crop' },
+                        { name: '白色真丝衬衫', category: 'tops', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=200&h=200&fit=crop' },
+                        { name: '黑色烟管裤', category: 'bottoms', color: '#000000', image: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=200&h=200&fit=crop' },
+                        { name: '金属腕表', category: 'accessories', color: '#FFD700', image: 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#808080', '#FFFFFF', '#000000', '#FFD700'],
+                    styleTags: ['职场', '干练', '高级'],
+                    occasion: '商务会议 / 面试 / 正式场合',
+                    reason: '灰白黑经典三色打造专业形象，真丝材质提升质感，烟管裤修饰腿型，金属腕表彰显品位。',
+                    views: '4.1k'
+                }
+            ],
+            '卫衣': [
+                {
+                    id: 'sweat-001',
+                    title: '休闲运动风',
+                    matchScore: 87,
+                    mainImage: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&h=600&fit=crop',
+                    items: [
+                        { name: '灰色oversize卫衣', category: 'tops', color: '#808080', image: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=200&h=200&fit=crop' },
+                        { name: '鲨鱼裤', category: 'bottoms', color: '#000000', image: 'https://images.unsplash.com/photo-1542272454315-4c01d7abdf4a?w=200&h=200&fit=crop' },
+                        { name: '老爹鞋', category: 'shoes', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1560769629-975ec94e6a86?w=200&h=200&fit=crop' },
+                        { name: '棒球帽', category: 'accessories', color: '#4B5320', image: 'https://images.unsplash.com/photo-1582791694770-cbdc9dda338f?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#808080', '#000000', '#FFFFFF', '#4B5320'],
+                    styleTags: ['休闲', '运动', '舒适'],
+                    occasion: '运动 / 休闲 / 上学',
+                    reason: 'oversize卫衣营造慵懒感，搭配修身鲨鱼裤上宽下窄显腿长，老爹鞋增加街头感。',
+                    views: '3.5k'
+                }
+            ],
+            '连衣裙': [
+                {
+                    id: 'dress-001',
+                    title: '优雅茶歇裙',
+                    matchScore: 93,
+                    mainImage: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=800&h=600&fit=crop',
+                    items: [
+                        { name: 'V领茶歇裙', category: 'dresses', color: '#E6E6FA', image: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=200&h=200&fit=crop' },
+                        { name: '草编包', category: 'accessories', color: '#F5F5DC', image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=200&h=200&fit=crop' },
+                        { name: '绑带凉鞋', category: 'shoes', color: '#D4C4B0', image: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=200&h=200&fit=crop' },
+                        { name: '金色耳饰', category: 'accessories', color: '#FFD700', image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#E6E6FA', '#F5F5DC', '#D4C4B0', '#FFD700'],
+                    styleTags: ['优雅', '法式', '度假'],
+                    occasion: '约会 / 度假 / 下午茶',
+                    reason: '茶歇裙收腰设计显瘦，V领拉长颈部线条，草编包增添度假风情。',
+                    views: '4.8k'
+                }
+            ],
+            '大衣': [
+                {
+                    id: 'coat-001',
+                    title: '秋冬气质风',
+                    matchScore: 91,
+                    mainImage: 'https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=800&h=600&fit=crop',
+                    items: [
+                        { name: '驼色大衣', category: 'outerwear', color: '#D4C4B0', image: 'https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=200&h=200&fit=crop' },
+                        { name: '高领毛衣', category: 'tops', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=200&h=200&fit=crop' },
+                        { name: '短靴', category: 'shoes', color: '#000000', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&h=200&fit=crop' },
+                        { name: '围巾', category: 'accessories', color: '#8B4513', image: 'https://images.unsplash.com/photo-1520903920243-00d872a2d1c9?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#D4C4B0', '#FFFFFF', '#000000', '#8B4513'],
+                    styleTags: ['秋冬', '气质', '保暖'],
+                    occasion: '日常 / 通勤 / 出游',
+                    reason: '驼色大衣经典百搭，内搭高领毛衣保暖又时髦，短靴增添利落感。',
+                    views: '5.2k'
+                }
+            ]
+        };
+
+        const colorNames = {
+            '#4B5320': '军绿', '#FFFFFF': '白色', '#000000': '黑色', '#C0C0C0': '银色',
+            '#D4C4B0': '卡其', '#FFB6C1': '粉色', '#F5F5DC': '米色', '#E6E6FA': '淡紫',
+            '#FFDAB9': '裸色', '#FFFFF0': '珍珠白', '#808080': '灰色', '#FFD700': '金色',
+            '#8B4513': '焦糖'
+        };
+
+        const categoryNames = {
+            'tops': '上装', 'bottoms': '下装', 'outerwear': '外套',
+            'dresses': '连衣裙', 'accessories': '配饰', 'shoes': '鞋履'
+        };
+
+        // 页面切换
+        function switchPage(page) {
+            document.querySelectorAll('[id^="page-"]').forEach(el => {
+                el.classList.remove('page-active');
+                el.classList.add('page-hidden');
+            });
+            const target = document.getElementById(`page-${page}`);
+            if (target) {
+                target.classList.remove('page-hidden');
+                target.classList.add('page-active');
+            }
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const isActive = btn.dataset.page === page;
+                btn.classList.toggle('text-primary-400', isActive);
+                btn.classList.toggle('text-slate-400', !isActive);
+            });
+        }
+
+        // AI搜索功能 - 修复版
+        function quickSearch(keyword) {
+            document.getElementById('ai-search-input').value = keyword;
+            startAISearch();
+        }
+
+        function startAISearch() {
+            const keyword = document.getElementById('ai-search-input').value.trim();
+            if (!keyword) {
+                showToast('请输入搜索关键词');
+                return;
+            }
+
+            // 显示加载状态
+            document.getElementById('trending-tags').classList.add('hidden');
+            document.getElementById('default-inspiration').classList.add('hidden');
+            document.getElementById('ai-results').classList.add('hidden');
+            document.getElementById('ai-thinking').classList.remove('hidden');
+            
+            // 模拟AI思考过程
+            const thoughts = [
+                `正在分析"${keyword}"流行趋势...`,
+                `从时尚数据库匹配搭配方案...`,
+                `生成个性化推荐...`
+            ];
+            
+            let step = 0;
+            const statusEl = document.getElementById('ai-status');
+            statusEl.textContent = thoughts[0];
+            
+            const interval = setInterval(() => {
+                step++;
+                if (step < thoughts.length) {
+                    statusEl.textContent = thoughts[step];
+                }
+            }, 500);
+
+            // 模拟完成
+            setTimeout(() => {
+                clearInterval(interval);
+                document.getElementById('ai-thinking').classList.add('hidden');
+                renderOutfitResults(keyword);
+            }, 1500);
+        }
+
+        function renderOutfitResults(keyword) {
+            const resultsContainer = document.getElementById('ai-results');
+            const grid = document.getElementById('inspiration-grid');
+            
+            // 查找匹配的数据
+            let results = [];
+            
+            // 精确匹配
+            if (outfitDatabase[keyword]) {
+                results = outfitDatabase[keyword];
+            } else {
+                // 模糊匹配
+                for (let key in outfitDatabase) {
+                    if (key.includes(keyword) || keyword.includes(key)) {
+                        results = [...results, ...outfitDatabase[key]];
+                    }
+                }
+            }
+            
+            // 如果没有找到，生成通用推荐
+            if (results.length === 0) {
+                results = generateGenericOutfits(keyword);
+            }
+            
+            document.getElementById('result-count').textContent = `${results.length}套方案`;
+            
+            grid.innerHTML = results.map((outfit, index) => `
+                <div class="outfit-card animate-fade-in" style="animation-delay: ${index * 0.1}s">
+                    <div class="flex justify-between items-center p-4 pb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="match-score text-xs px-2 py-1 rounded-full">匹配度 ${outfit.matchScore}%</span>
+                            <span class="text-xs text-slate-400">${outfit.views}人看过</span>
+                        </div>
+                        <button onclick="toggleLike(this)" class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="px-4 mb-3">
+                        <div class="relative rounded-xl overflow-hidden mb-3" style="height: 220px;">
+                            <img src="${outfit.mainImage}" class="w-full h-full object-cover" alt="${outfit.title}" onerror="this.src='https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&h=600&fit=crop'">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+                            <div class="absolute bottom-3 left-3 right-3">
+                                <h3 class="text-white font-bold text-lg mb-1 drop-shadow-md">${outfit.title}</h3>
+                                <div class="flex gap-2 flex-wrap">
+                                    ${outfit.styleTags.map(tag => `<span class="text-[10px] px-2 py-0.5 bg-white/20 backdrop-blur text-white rounded-full">${tag}</span>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs text-slate-500">配色：</span>
+                            <div class="flex gap-1">
+                                ${outfit.colorPalette.map(color => `
+                                    <div class="group relative">
+                                        <div class="color-dot" style="background-color: ${color};"></div>
+                                        <span class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-[9px] bg-slate-800 text-white px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">${colorNames[color] || '定制'}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="px-4 pb-3">
+                        <p class="text-xs text-slate-500 mb-2 font-medium">搭配单品</p>
+                        <div class="grid grid-cols-4 gap-2 mb-3">
+                            ${outfit.items.map(item => `
+                                <div class="item-chip rounded-lg p-2 text-center cursor-pointer" onclick="showToast('${item.name}')">
+                                    <div class="aspect-square rounded-md overflow-hidden mb-1.5 bg-slate-100">
+                                        <img src="${item.image}" class="w-full h-full object-cover" alt="${item.name}" onerror="this.src='https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=200&h=200&fit=crop'">
+                                    </div>
+                                    <p class="text-[10px] text-slate-700 truncate leading-tight">${item.name}</p>
+                                    <p class="text-[8px] text-slate-400 mt-0.5">${categoryNames[item.category] || '单品'}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div class="bg-primary-50 rounded-xl p-3 border border-primary-100">
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                <span class="text-primary-500 font-medium">💡 搭配思路：</span>${outfit.reason}
+                            </p>
+                        </div>
+                        
+                        <div class="mt-3 flex items-center justify-between">
+                            <div class="flex items-center gap-1.5 text-xs text-slate-500">
+                                <svg class="w-3.5 h-3.5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                <span>适合：${outfit.occasion}</span>
+                            </div>
+                            <button onclick="showToast('已添加到搭配方案')" class="text-xs bg-primary-400 text-white px-3 py-1.5 rounded-full hover:bg-primary-500 transition-colors">
+                                应用搭配
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            resultsContainer.classList.remove('hidden');
+        }
+
+        function generateGenericOutfits(keyword) {
+            return [
+                {
+                    id: 'gen-001',
+                    title: `${keyword}简约日常`,
+                    matchScore: 78,
+                    mainImage: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&h=600&fit=crop',
+                    items: [
+                        { name: `${keyword}(主)`, category: 'bottoms', color: '#D4C4B0', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=200&h=200&fit=crop' },
+                        { name: '基础白T', category: 'tops', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=200&h=200&fit=crop' },
+                        { name: '帆布鞋', category: 'shoes', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1607522370275-f14206abe5d3?w=200&h=200&fit=crop' },
+                        { name: '托特包', category: 'accessories', color: '#F5F5DC', image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#D4C4B0', '#FFFFFF', '#F5F5DC'],
+                    styleTags: ['简约', '日常', '百搭'],
+                    occasion: '日常 / 休闲',
+                    reason: `基于"${keyword}"的特性，搭配基础单品打造简约不简单的日常造型，色彩协调易于驾驭。`,
+                    views: '1.2k'
+                },
+                {
+                    id: 'gen-002',
+                    title: `${keyword}气质通勤`,
+                    matchScore: 75,
+                    mainImage: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&h=600&fit=crop',
+                    items: [
+                        { name: `${keyword}(主)`, category: 'bottoms', color: '#808080', image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=200&h=200&fit=crop' },
+                        { name: '衬衫', category: 'tops', color: '#FFFFFF', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=200&h=200&fit=crop' },
+                        { name: '乐福鞋', category: 'shoes', color: '#000000', image: 'https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=200&h=200&fit=crop' },
+                        { name: '腰带', category: 'accessories', color: '#8B4513', image: 'https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=200&h=200&fit=crop' }
+                    ],
+                    colorPalette: ['#808080', '#FFFFFF', '#000000'],
+                    styleTags: ['通勤', '气质', '轻熟'],
+                    occasion: '上班 / 面试',
+                    reason: `将"${keyword}"与职场单品结合，既保持了个性又符合职场着装要求，提升专业形象。`,
+                    views: '980'
+                }
+            ];
+        }
+
+        function toggleLike(btn) {
+            const isLiked = btn.classList.contains('text-red-500');
+            if (isLiked) {
+                btn.classList.remove('text-red-500');
+                btn.classList.add('text-slate-400');
+            } else {
+                btn.classList.add('text-red-500');
+                btn.classList.remove('text-slate-400');
+                showToast('已收藏');
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
