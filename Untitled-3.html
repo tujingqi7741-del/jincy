@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>智能衣橱 - Smart Wardrobe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#fbf7ff', 100: '#f5f0ff', 200: '#ede5ff',
+                            300: '#ddd0ff', 400: '#c9b5f7', 500: '#b49be8',
+                            600: '#9f82d9',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- 引入AI抠图库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.0.0-beta.2/dist/browser.js"></script>
+<base target="_blank">
+</head>
+<body class="bg-[#fbf7ff] text-slate-700 antialiased">
+
+    <div id="app" class="max-w-md mx-auto min-h-screen relative shadow-2xl overflow-hidden bg-white/60 border-x border-primary-100">
+        
+        <!-- 状态栏 -->
+        <div class="glass sticky top-0 z-50 px-6 py-3 flex justify-between items-center text-xs font-medium text-slate-500">
+            <span>09:41</span>
+            <div class="flex gap-1">
+                <svg class="w-4 h-4 text-primary-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+            </div>
+        </div>
+
+        <div class="pb-20 relative">
+            
+            <!-- AI发现页面 -->
+            <div id="page-discovery" class="page-transition page-hidden min-h-screen bg-white/60">
+                <div class="glass sticky top-0 z-10 px-6 py-4">
+                    <h2 class="text-lg font-semibold text-center text-slate-800">AI搭配灵感</h2>
+                </div>
+                <div class="p-4">
+                    <div class="relative mb-4">
+                        <input type="text" id="ai-search-input" placeholder="搜索单品，例如：工装裙、连衣裙..." class="w-full bg-white border border-primary-200 rounded-2xl py-4 pl-12 pr-12 text-sm focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 shadow-sm" onkeypress="if(event.key==='Enter') startAISearch()">
+                        <svg class="w-5 h-5 text-primary-400 absolute left-4 top-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <button onclick="startAISearch()" class="absolute right-3 top-3 w-8 h-8 bg-primary-400 rounded-full flex items-center justify-center text-white shadow-md hover:bg-primary-500 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg></button>
+                    </div>
+                    <div class="mb-6" id="trending-tags">
+                        <p class="text-xs text-slate-500 mb-3 font-medium">热门搜索</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="quickSearch('工装裙')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">🔧 工装裙</button>
+                            <button onclick="quickSearch('约会穿搭')" class="px-3 py-1.5 bg-white border border-primary-200 rounded-full text-xs text-slate-600 hover:bg-primary-50 transition-all">💕 约会穿搭</button>
+                        </div>
+                    </div>
+                    <div id="ai-thinking" class="hidden py-12 text-center"><div class="flex justify-center gap-1 mb-4"><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span></div><p class="text-sm text-slate-600 mb-2">AI正在分析时尚数据...</p><p class="text-xs text-slate-400" id="ai-status">准备中...</p></div>
+                    <div id="ai-results" class="hidden space-y-4"><div class="flex justify-between items-center mb-2 px-1"><div><h3 class="font-semibold text-slate-800">推荐搭配方案</h3><p class="text-xs text-slate-500 mt-0.5">为您找到以下搭配</p></div><span class="text-xs text-primary-500 font-medium bg-primary-50 px-2 py-1 rounded-full" id="result-count">0套</span></div><div id="inspiration-grid" class="space-y-4"></div></div>
+                    <div id="default-inspiration" class="space-y-4"><h3 class="font-semibold text-slate-800 mb-3 px-1">热门推荐</h3><div onclick="quickSearch('工装裙')" class="bg-white rounded-2xl p-3 border border-primary-100 shadow-sm cursor-pointer hover:shadow-md transition-all"><div class="flex gap-3"><img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=200&h=200&fit=crop" class="w-20 h-20 rounded-lg object-cover"><div class="flex-1"><h4 class="font-medium text-slate-800 text-sm mb-1">工装裙穿搭指南</h4><p class="text-xs text-slate-500 mb-2">街头酷飒 · 温柔甜酷 · 通勤干练</p><span class="text-xs text-primary-500 bg-primary-50 px-2 py-0.5 rounded-full">查看3套方案</span></div></div></div><div onclick="quickSearch('约会穿搭')" class="bg-white rounded-2xl p-3 border border-primary-100 shadow-sm cursor-pointer hover:shadow-md transition-all"><div class="flex gap-3"><img src="https://images.unsplash.com/photo-1599643477877-530eb83abc8e?w=200&h=200&fit=crop" class="w-20 h-20 rounded-lg object-cover"><div class="flex-1"><h4 class="font-medium text-slate-800 text-sm mb-1">浪漫约会穿搭</h4><p class="text-xs text-slate-500 mb-2">法式优雅 · 甜美淑女</p><span class="text-xs text-primary-500 bg-primary-50 px-2 py-0.5 rounded-full">查看方案</span></div></div></div></div>
+                </div>
+            </div>
+
+            <!-- 我的衣橱页面 -->
+            <div id="page-wardrobe" class="page-transition page-active p-4">
+                <h1 class="text-2xl font-bold text-slate-800 mb-4">我的衣橱</h1>
+                <div id="wardrobe-grid" class="grid grid-cols-3 gap-3">
+                    <!-- 用户上传的单品将在这里展示 -->
+                </div>
+            </div>
+
+            <!-- 上传与抠图页面 -->
+            <div id="page-upload" class="page-transition page-hidden">
+                <div class="glass sticky top-0 z-10 px-6 py-4 flex items-center gap-4">
+                    <button onclick="switchPage('wardrobe')" class="text-slate-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg></button>
+                    <h2 class="text-lg font-semibold text-center text-slate-800">上传新单品</h2>
+                </div>
+                <div class="upload-container">
+                    <input type="file" id="file-input" class="hidden" accept="image/*" onchange="handleFileSelect(event)">
+                    <div class="upload-box" onclick="triggerFileUpload()">
+                        <svg class="w-12 h-12 text-primary-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        <p class="font-semibold text-primary-500">点击上传图片</p>
+                        <p class="text-xs text-slate-400 mt-1">支持 JPG, PNG, WEBP 格式</p>
+                    </div>
+                    <div id="image-preview-container" style="display: none;">
+                        <img id="image-preview" src="">
+                        <div id="processing-overlay" class="processing-overlay" style="display: none;">
+                            <div class="flex justify-center gap-1 mb-4"><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span></div>
+                            <p id="processing-status" class="text-sm text-slate-600">处理中...</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 text-center space-x-4">
+                        <button id="remove-bg-btn" onclick="removeBackground()" style="display: none;" class="bg-primary-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-primary-600 transition-all disabled:opacity-50">AI智能抠图</button>
+                        <button id="save-btn" onclick="saveToWardrobe()" style="display: none;" class="bg-green-500 text-white font-bold py-3 px-6 rounded-full shadow-lg hover:bg-green-600 transition-all">保存到衣橱</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="page-community" class="page-transition page-hidden p-4"><h2 class="text-lg font-semibold text-center mb-4">好友社区</h2><div class="text-center text-slate-400 text-sm">社区内容...</div></div>
+            <div id="page-outfit" class="page-transition page-hidden p-4"><div class="text-center text-slate-400">搭配功能...</div></div>
+            <div id="page-profile" class="page-transition page-hidden p-4"><div class="text-center text-slate-400">个人中心...</div></div>
+        </div>
+
+        <!-- 悬浮上传按钮 -->
+        <button id="fab-upload" class="fab">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+        </button>
+
+        <!-- 底部导航 -->
+        <div class="fixed bottom-0 left-0 right-0 glass safe-bottom z-40 max-w-md mx-auto border-t border-primary-100">
+            <div class="flex justify-around items-center py-2">
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('wardrobe')" data-page="wardrobe"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg><span class="text-[10px] font-medium">衣橱</span></button>
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('discovery')" data-page="discovery"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg><span class="text-[10px] font-medium">发现</span></button>
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('community')" data-page="community"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg><span class="text-[10px] font-medium">社区</span></button>
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('outfit')" data-page="outfit"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg><span class="text-[10px] font-medium">搭配</span></button>
+                <button class="nav-btn flex flex-col items-center gap-1 p-2 text-slate-400" onclick="switchPage('profile')" data-page="profile"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg><span class="text-[10px] font-medium">我的</span></button>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full text-sm font-medium shadow-xl opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+            提示信息
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
